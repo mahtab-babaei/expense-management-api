@@ -1,4 +1,4 @@
-from fastapi import FastAPI, status, Body, Path, HTTPException, Response
+from fastapi import FastAPI, status, Body, Path, HTTPException, Response, Query
 from fastapi.responses import JSONResponse
 
 app = FastAPI()
@@ -13,8 +13,12 @@ expenses = {
 
 
 @app.get("/expenses")
-def retrieve_all_costs():
-    return JSONResponse(content=expenses, status_code=status.HTTP_200_OK)
+def retrieve_all_costs(q: str | None = Query(alias="Search in descriptions", default=None)):
+    result = expenses
+    if q:
+        result = [item for item in expenses.values() if q.lower(
+        ) in item["description"].lower()]
+    return JSONResponse(content=result, status_code=status.HTTP_200_OK)
 
 
 @app.post("/expenses")
