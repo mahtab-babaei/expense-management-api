@@ -1,5 +1,6 @@
 from fastapi import FastAPI, status, Body, Path, HTTPException, Response, Query
 from fastapi.responses import JSONResponse
+from schemas import ExpenseResponseSchema, ExpenseCreateSchema, ExpenseUpdateSchema
 
 app = FastAPI()
 
@@ -12,58 +13,58 @@ expenses = {
 }
 
 
-@app.get("/expenses")
+@app.get("/expenses", response_model=list[ExpenseResponseSchema], status_code=status.HTTP_200_OK)
 def retrieve_all_costs(q: str | None = Query(alias="Search in descriptions", default=None)):
-    result = expenses
+    result = list(expenses.values())
     if q:
         result = [item for item in expenses.values() if q.lower(
         ) in item["description"].lower()]
-    return JSONResponse(content=result, status_code=status.HTTP_200_OK)
+    return result
 
 
-@app.post("/expenses")
-def create_new_cost(description: str = Body(), amount: float = Body()):
-    if not description.strip():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail="description can not be empty")
-    new_id = max(expenses.keys()) + 1
+@app.post("/expenses", response_model=ExpenseResponseSchema, status_code=status.HTTP_201_CREATED)
+def create_new_cost(expense: ExpenseCreateSchema):
+    new_id = max(expenses.keys(), default=0) + 1
     new_cost = {
         "id": new_id,
-        "description": description,
-        "amount": amount
+        "description": expense.description,
+        "amount": expense.amount,
     }
     expenses[new_id] = new_cost
-    return JSONResponse(content=new_cost, status_code=status.HTTP_201_CREATED)
+    return new_cost
 
 
-@app.get("/expenses/{expense_id}")
-def retrieve_cost(expense_id: int = Path(description="The ID of the expense")):
+@app.get("/expenses/{expense_id}", response_model=ExpenseResponseSchema)
+def retrieve_cost(expense_id: int = Path(gt=0)):
     expense = expenses.get(expense_id)
-    if expense:
-        return JSONResponse(content=expense, status_code=status.HTTP_200_OK)
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                        detail="item not found")
+    if expense is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="item not found")
+    return expense
 
 
-@app.put("/expenses/{expense_id}")
-def update_cost(expense_id: int, description: str = Body(), amount: float = Body()):
+@app.put("/expenses/{expense_id}", response_model=ExpenseResponseSchema)
+def update_cost(expense_id: int, expense_data: ExpenseUpdateSchema):
     expense = expenses.get(expense_id)
-    if expense:
-        if not description.strip():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="description can not be empty")
-        expense["description"] = description
-        expense["amount"] = amount
-        return JSONResponse(content=expense, status_code=status.HTTP_200_OK)
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                        detail="item not found")
+    if expense is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item not found"
+        )
+    expense["description"] = expense_data.description
+    expense["amount"] = expense_data.amount
+    return expense
 
 
-@app.delete("/expenses/{expense_id}")
+@app.delete("/expenses/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
 def remove_cost(expense_id: int):
     expense = expenses.get(expense_id)
-    if expense:
-        expenses.pop(expense_id)
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                        detail="item not found")
+    if expense is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item not found"
+        )
+
+    expenses.pop(expense_id)
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
