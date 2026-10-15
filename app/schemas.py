@@ -1,5 +1,4 @@
 from pydantic import BaseModel, Field, field_validator
-from fastapi import HTTPException, status
 
 
 class BaseExpenseSchema(BaseModel):
@@ -12,8 +11,7 @@ class BaseExpenseSchema(BaseModel):
     def validation_description(cls, value: str) -> str:
         value = value.strip()
         if not value:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                                detail="description can not be empty")
+            raise ValueError("description can not be empty")
         return value
 
 

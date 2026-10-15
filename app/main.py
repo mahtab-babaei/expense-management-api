@@ -1,5 +1,4 @@
-from fastapi import FastAPI, status, Body, Path, HTTPException, Response, Query
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, status, Path, HTTPException, Response, Query
 from schemas import ExpenseResponseSchema, ExpenseCreateSchema, ExpenseUpdateSchema
 
 app = FastAPI()
@@ -17,7 +16,7 @@ expenses = {
 def retrieve_all_costs(q: str | None = Query(alias="Search in descriptions", default=None)):
     result = list(expenses.values())
     if q:
-        result = [item for item in expenses.values() if q.lower(
+        result = [item for item in result if q.lower(
         ) in item["description"].lower()]
     return result
 
