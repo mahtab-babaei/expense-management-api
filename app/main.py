@@ -1,41 +1,31 @@
-from fastapi import FastAPI, status, Path, HTTPException, Response, Query
+from fastapi import FastAPI, status, Path, HTTPException, Response, Query, Depends
 from schemas import ExpenseResponseSchema, ExpenseCreateSchema, ExpenseUpdateSchema
+from database import get_db, Expense
+from sqlalchemy.orm import Session
 
 app = FastAPI()
 
-expenses = {
-    1: {"id": 1, "description": "groceries", "amount": 125.5},
-    2: {"id": 2, "description": "taxi", "amount": 25.85},
-    3: {"id": 3, "description": "Clothing", "amount": 406.65},
-    4: {"id": 4, "description": "bills", "amount": 32.3},
-    5: {"id": 5, "description": "coffee", "amount": 9.99},
-}
-
-
 @app.get("/expenses", response_model=list[ExpenseResponseSchema], status_code=status.HTTP_200_OK)
-def retrieve_all_costs(q: str | None = Query(alias="Search in descriptions", default=None)):
-    result = list(expenses.values())
+def retrieve_all_costs(q: str | None = Query(alias="Search in descriptions", default=None), db: Session = Depends(get_db)):
+    query = db.query(Expense)
     if q:
-        result = [item for item in result if q.lower(
-        ) in item["description"].lower()]
+        query = query.filter(Expense.description.ilike(f"%{q}%"))
+    result = query.all()
     return result
 
 
 @app.post("/expenses", response_model=ExpenseResponseSchema, status_code=status.HTTP_201_CREATED)
-def create_new_cost(expense: ExpenseCreateSchema):
-    new_id = max(expenses.keys(), default=0) + 1
-    new_cost = {
-        "id": new_id,
-        "description": expense.description,
-        "amount": expense.amount,
-    }
-    expenses[new_id] = new_cost
+def create_new_cost(request: ExpenseCreateSchema, db: Session = Depends(get_db)):
+    new_cost = Expense(description=request.description, amount=request.amount)
+    db.add(new_cost)
+    db.commit()
+    db.refresh(new_cost)
     return new_cost
 
 
 @app.get("/expenses/{expense_id}", response_model=ExpenseResponseSchema)
-def retrieve_cost(expense_id: int = Path(gt=0)):
-    expense = expenses.get(expense_id)
+def retrieve_cost(expense_id: int = Path(gt=0), db: Session = Depends(get_db)):
+    expense = db.query(Expense).filter_by(id=expense_id).one_or_none()
     if expense is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail="item not found")
@@ -43,27 +33,29 @@ def retrieve_cost(expense_id: int = Path(gt=0)):
 
 
 @app.put("/expenses/{expense_id}", response_model=ExpenseResponseSchema)
-def update_cost(expense_id: int, expense_data: ExpenseUpdateSchema):
-    expense = expenses.get(expense_id)
+def update_cost(expense_id: int, expense_data: ExpenseUpdateSchema, db: Session = Depends(get_db)):
+    expense = db.query(Expense).filter_by(id=expense_id).one_or_none()
     if expense is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Item not found"
         )
-    expense["description"] = expense_data.description
-    expense["amount"] = expense_data.amount
+    expense.description = expense_data.description
+    expense.amount = expense_data.amount
+    db.commit()
+    db.refresh(expense)
     return expense
 
 
 @app.delete("/expenses/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remove_cost(expense_id: int):
-    expense = expenses.get(expense_id)
+def remove_cost(expense_id: int, db: Session = Depends(get_db)):
+    expense = db.query(Expense).filter_by(id=expense_id).one_or_none()
     if expense is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Item not found"
         )
 
-    expenses.pop(expense_id)
-
+    db.delete(expense)
+    db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
